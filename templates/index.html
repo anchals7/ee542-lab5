@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>EE542 Team Phone Monitor</title>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			margin: 30px;
+			background: #f5f5f5;
+		}
+		
+		h1 {
+			margin-bottom: 5px;
+		}
+
+		.subtitle {
+			color: #666;
+			margin-bottom: 25px;
+		}
+	
+		#phone-grid {
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 15px;
+			margin-bottom: 25px;
+		}
+		
+		.phone-card {
+			background: white;
+			padding: 20px;
+			border-radius: 12px;
+			box-shadow: 0 2px 8px #ccc;
+		}
+
+		.phone-card h2 {
+			margin-top: 0;
+		}
+
+		.live {
+			color: green;
+			font-weight: bold;
+		}
+
+		.stale {
+			color: red;
+			font-weight: bold;
+		}
+
+		#map {
+			height: 500px;
+			background: #ddd;
+			border-radius: 12px;
+			margin-bottom: 25px;
+		}
+
+		.alert {
+			background: #ffe0e0;
+			padding: 15px;
+			margin-bottom: 10px;
+			border-radius: 10px;
+		}
+
+		.no-alert {
+			background: #e0ffe0;
+			padding: 15px;
+			border-radius: 10px;
+		}
+	</style>
+</head>
+
+<body>
+	<h1>EE542 Team Phone Monitor</h1>
+	<div class="subtitle">
+		Real-time IoT phone tracking and battery monitoring
+	</div>
+	
+	<div id="phone-grid"></div>
+
+	<div id="map"></div>
+
+	<div id="alerts"></div>
+
+	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+	<script>
+
+		const map = L.map("map").setView(
+			[34.0203, -118.2861],
+			17
+		);
+
+		L.tileLayer(
+			"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+			{
+				attribution: "&copy; OpenStreetMap contributors"
+			}
+		).addTo(map);
+
+
+		const markers = {};
+
+
+		async function updateDashboard() {
+
+			const response = await fetch("/api/status");
+
+			const data = await response.json();
+
+
+			const grid =
+				document.getElementById("phone-grid");
+
+			grid.innerHTML = "";
+
+
+			for (const name in data.phones) {
+
+				const phone = data.phones[name];
+
+				const age =
+					Math.round(
+						(Date.now() - phone.timestamp) / 1000
+					);
+
+				const live = age <= 120;
+
+
+				const card =
+					document.createElement("div");
+
+				card.className = "phone-card";
+
+
+				card.innerHTML =
+					"<h2>" + name + "</h2>" +
+					"<p><strong>Battery:</strong> " +
+					phone.battery + "%</p>" +
+					"<p><strong>Location:</strong> " +
+					phone.latitude + ", " +
+					phone.longitude + "</p>" +
+					"<p class='" +
+					(live ? "live" : "stale") +
+					"'>" +
+					(live ? "LIVE" : "STALE") +
+					"</p>";
+				grid.appendChild(card);
+
+
+				const position = [
+					phone.latitude,
+					phone.longitude
+				];
+
+
+				if (markers[name]) {
+
+					markers[name].setLatLng(position);
+
+				} else {
+
+					markers[name] =
+						L.marker(position)
+						.addTo(map)
+						.bindPopup(
+							"<strong>" +
+							name +
+							"</strong><br>" +
+							"Battery: " +
+							phone.battery +
+							"%"
+						);
+				}
+			}
+
+
+			const alerts =
+				document.getElementById("alerts");
+
+			alerts.innerHTML = "";
+
+
+			if (data.alerts.length === 0) {
+
+				alerts.innerHTML =
+					"<div class='no-alert'>" +
+					"No low-battery alerts" +
+					"</div>";
+
+			} else {
+
+				for (const alert of data.alerts) {
+
+					const div =
+						document.createElement("div");
+
+					div.className = "alert";
+
+
+					div.innerHTML =
+						"<strong>Low Battery:</strong> " +
+						alert.phone +
+						" (" +
+						alert.battery +
+						"%)<br>" +
+						"Closest teammate: " +
+						alert.closest +
+						"<br>" +
+						"Distance: " +
+						(alert.distance_km * 1000)
+						.toFixed(0) +
+						" meters";
+
+
+					alerts.appendChild(div);
+				}
+			}
+		}
+
+
+		updateDashboard();
+
+		setInterval(updateDashboard, 10000);
+	</script>
+</body>
+</html>
+
+
